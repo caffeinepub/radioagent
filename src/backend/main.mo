@@ -1,3 +1,4 @@
+
 import Map "mo:core/Map";
 import Array "mo:core/Array";
 import Order "mo:core/Order";
@@ -14,6 +15,7 @@ import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Storage "blob-storage/Storage";
 import AccessControl "authorization/access-control";
+
 
 actor {
   // State
@@ -66,25 +68,27 @@ actor {
     id : AnalysisId;
     userId : UserId;
     patientName : Text;
-    modality : Modality;
-    timestamp : Time.Time;
-    imageQuality : Quality;
+    patientPhone : Text;
     findings : [Text];
-    triageStatus : TriageStatus;
-    reportText : Text;
     confidenceScores : [Float];
+    triageStatus : TriageStatus;
+    imageQuality : Quality;
+    modality : Modality;
+    reportText : Text;
+    timestamp : Time.Time;
     image : Storage.ExternalBlob;
   };
 
   public type AnalysisInput = {
     patientName : Text;
-    modality : Modality;
-    timestamp : Time.Time;
-    imageQuality : Quality;
+    patientPhone : Text;
     findings : [Text];
-    triageStatus : TriageStatus;
-    reportText : Text;
     confidenceScores : [Float];
+    triageStatus : TriageStatus;
+    imageQuality : Quality;
+    modality : Modality;
+    reportText : Text;
+    timestamp : Time.Time;
     image : Storage.ExternalBlob;
   };
 
@@ -100,12 +104,27 @@ actor {
   };
 
   let analyses = Map.empty<AnalysisId, AnalysisRecord>();
-  let userProfiles = Map.empty<Principal, UserProfile>();
   var nextAnalysisId : AnalysisId = 0;
   let accessControlState = AccessControl.initState();
+  let userProfiles = Map.empty<Principal, UserProfile>();
 
   include MixinStorage();
   include MixinAuthorization(accessControlState);
+
+  // Helper Functions
+  func getCurrentUserProfileInternal(user : Principal) : UserProfile {
+    switch (userProfiles.get(user)) {
+      case (null) { Runtime.trap("User profile not found") };
+      case (?profile) { profile };
+    };
+  };
+
+  func getAnalysisInternal(analysisId : AnalysisId) : AnalysisRecord {
+    switch (analyses.get(analysisId)) {
+      case (null) { Runtime.trap("Analysis not found") };
+      case (?analysis) { analysis };
+    };
+  };
 
   // User Profile Management
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
@@ -129,14 +148,6 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Helper Functions
-  func getAnalysisInternal(analysisId : AnalysisId) : AnalysisRecord {
-    switch (analyses.get(analysisId)) {
-      case (null) { Runtime.trap("Analysis not found") };
-      case (?analysis) { analysis };
-    };
-  };
-
   // Register New Analysis
   public shared ({ caller }) func submitAnalysis(input : AnalysisInput) : async AnalysisId {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
@@ -146,13 +157,14 @@ actor {
       id = nextAnalysisId;
       userId = caller;
       patientName = input.patientName;
-      modality = input.modality;
-      timestamp = input.timestamp;
-      imageQuality = input.imageQuality;
+      patientPhone = input.patientPhone;
       findings = input.findings;
-      triageStatus = input.triageStatus;
-      reportText = input.reportText;
       confidenceScores = input.confidenceScores;
+      triageStatus = input.triageStatus;
+      imageQuality = input.imageQuality;
+      modality = input.modality;
+      reportText = input.reportText;
+      timestamp = input.timestamp;
       image = input.image;
     };
     analyses.add(nextAnalysisId, fullRecord);

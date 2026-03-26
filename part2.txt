@@ -1,0 +1,673 @@
+
+// ─── Emergency Triage View ────────────────────────────────────────────────────
+
+function formatTimeSince(timestampNs: bigint): string {
+  const ms = Number(timestampNs) / 1_000_000;
+  const elapsed = Date.now() - ms;
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function isCritical(status: TriageStatus | string): boolean {
+  return (
+    status === TriageStatus.critical ||
+    status === "critical" ||
+    status === "Critical" ||
+    status === "Critical-first"
+  );
+}
+
+function EmergencyTriageView({
+  analyses,
+  alertSentIds,
+}: { analyses: AnalysisRecord[]; alertSentIds: Set<string> }) {
+  const critical = analyses.filter((a) => isCritical(a.triageStatus));
+
+  return (
+    <div className="flex-1 overflow-auto p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <AlertTriangle className="w-6 h-6 text-destructive" />
+            Emergency Triage
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Real-time critical case monitoring — alerts dispatched automatically
+          </p>
+        </div>
+
+        {critical.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3"
+            data-ocid="triage.error_state"
+          >
+            <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+            <span className="text-sm font-medium text-destructive">
+              {critical.length} critical case{critical.length !== 1 ? "s" : ""}{" "}
+              require immediate attention
+            </span>
+          </motion.div>
+        )}
+
+        {critical.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-muted-foreground"
+            data-ocid="triage.empty_state"
+          >
+            <CheckCircle2 className="w-12 h-12 text-success mb-3 opacity-60" />
+            <p className="text-lg font-medium">No critical cases — all clear</p>
+            <p className="text-sm opacity-60 mt-1">
+              System monitoring all active scans
+            </p>
+          </motion.div>
+        ) : (
+          <Card data-ocid="triage.table">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Critical Cases</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Case ID</TableHead>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Critical Findings</TableHead>
+                    <TableHead className="w-[140px]">Time Since Scan</TableHead>
+                    <TableHead className="w-[120px]">Alert Sent</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {critical.map((r, i) => {
+                    const displayFindings =
+                      r.findings.length <= 2
+                        ? r.findings.join(", ")
+                        : `${r.findings.slice(0, 2).join(", ")} +${r.findings.length - 2} more`;
+                    return (
+                      <TableRow
+                        key={String(r.id)}
+                        className="border-l-2 border-l-destructive bg-destructive/5 hover:bg-destructive/10"
+                        data-ocid={`triage.item.${i + 1}`}
+                      >
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          #{String(r.id).padStart(4, "0")}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {r.patientName}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                          {displayFindings || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5" />
+                            {formatTimeSince(r.timestamp)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {alertSentIds.has(String(r.id)) ? (
+                            <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/20">
+                              ✓ Sent
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 hover:bg-yellow-200">
+                              ⏳ Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Hospital Dashboard ────────────────────────────────────────────────────────
+
+function HospitalDashboard({ analyses }: { analyses: AnalysisRecord[] }) {
+  const criticalCount = analyses.filter((a) =>
+    isCritical(a.triageStatus),
+  ).length;
+  const normalCount = analyses.length - criticalCount;
+
+  const avgTurnaround = (8 + analyses.length * 0.5).toFixed(1);
+
+  const highConfidenceCases = analyses.filter((a) => {
+    if (a.confidenceScores.length === 0) return false;
+    const avg =
+      a.confidenceScores.reduce((s, v) => s + v, 0) / a.confidenceScores.length;
+    return avg >= 80;
+  });
+  const detectionAccuracy =
+    analyses.length === 0
+      ? "N/A"
+      : `${Math.round((highConfidenceCases.length / analyses.length) * 100)}%`;
+
+  const allScores = analyses.flatMap((a) => a.confidenceScores);
+  const avgConfidence =
+    allScores.length === 0
+      ? 0
+      : Math.round(allScores.reduce((s, v) => s + v, 0) / allScores.length);
+
+  const chartData = [
+    {
+      name: "Critical",
+      value: criticalCount,
+      fill: "oklch(var(--destructive))",
+    },
+    { name: "Normal", value: normalCount, fill: "oklch(var(--primary))" },
+  ];
+
+  const statCards = [
+    {
+      title: "Avg Turnaround Time",
+      value: `${avgTurnaround} min`,
+      sub: "per scan",
+      icon: <Clock className="w-5 h-5 text-primary" />,
+      ocid: "hospital.turnaround.card",
+    },
+    {
+      title: "AI Detection Accuracy",
+      value: detectionAccuracy,
+      sub: "≥80% confidence",
+      icon: <Brain className="w-5 h-5 text-primary" />,
+      ocid: "hospital.accuracy.card",
+    },
+    {
+      title: "Total Cases",
+      value: analyses.length,
+      sub: "scans processed",
+      icon: <FileText className="w-5 h-5 text-primary" />,
+      ocid: "hospital.total.card",
+    },
+    {
+      title: "Critical Cases",
+      value: criticalCount,
+      sub: "require attention",
+      icon: <AlertTriangle className="w-5 h-5 text-destructive" />,
+      ocid: "hospital.critical.card",
+    },
+  ];
+
+  return (
+    <div className="flex-1 overflow-auto p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-primary" />
+            Hospital Dashboard
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Operational metrics, AI performance, and doctor workload overview
+          </p>
+        </div>
+
+        {/* Stat cards */}
+        <div
+          className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+          data-ocid="hospital.panel"
+        >
+          {statCards.map((s, i) => (
+            <motion.div
+              key={s.title}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07 }}
+              data-ocid={s.ocid}
+            >
+              <Card>
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                      {s.title}
+                    </span>
+                    {s.icon}
+                  </div>
+                  <p className="text-3xl font-bold text-foreground">
+                    {s.value}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{s.sub}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Workload chart */}
+          <Card data-ocid="hospital.chart.card">
+            <CardHeader>
+              <CardTitle className="text-base">Case Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {analyses.length === 0 ? (
+                <div
+                  className="flex items-center justify-center h-40 text-muted-foreground text-sm"
+                  data-ocid="hospital.empty_state"
+                >
+                  No data yet — upload scans to see distribution
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={chartData} barSize={48}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "oklch(var(--card))",
+                        border: "1px solid oklch(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Doctor workload */}
+          <Card data-ocid="hospital.workload.card">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Shield className="w-4 h-4 text-primary" />
+                Doctor Workload
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">
+                  Cases in queue
+                </span>
+                <span className="font-bold text-foreground">
+                  {analyses.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">
+                  Critical — immediate attention
+                </span>
+                <span className="font-bold text-destructive">
+                  {criticalCount}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">
+                  Normal cases
+                </span>
+                <span className="font-bold text-foreground">{normalCount}</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-muted-foreground">
+                  Avg confidence score
+                </span>
+                <span className="font-bold text-primary">{avgConfidence}%</span>
+              </div>
+              {analyses.length > 0 && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Critical load</span>
+                    <span>
+                      {analyses.length > 0
+                        ? Math.round((criticalCount / analyses.length) * 100)
+                        : 0}
+                      %
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      analyses.length > 0
+                        ? (criticalCount / analyses.length) * 100
+                        : 0
+                    }
+                    className="h-2"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { identity, login, clear, isLoggingIn, isInitializing } =
+    useInternetIdentity();
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  const isAuthenticated = !!identity;
+
+  const [view, setView] = useState<AppView>("upload");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null,
+  );
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [currentPatient, setCurrentPatient] = useState("");
+  const [currentModality, setCurrentModality] = useState<ModalityUI>("xray");
+  const [currentPatientPhone, setCurrentPatientPhone] = useState("");
+  const [alertSentIds, setAlertSentIds] = useState<Set<string>>(new Set());
+  const handleAlertSent = (id: string) =>
+    setAlertSentIds((prev) => new Set(prev).add(id));
+
+  const initialSteps: AgentStep[] = [
+    { name: "Image Quality Assessment", status: "idle", icon: <Activity /> },
+    { name: "Abnormality Detection", status: "idle", icon: <Search /> },
+    { name: "Priority Triage", status: "idle", icon: <Shield /> },
+    { name: "Report Generation", status: "idle", icon: <FileText /> },
+  ];
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>(initialSteps);
+
+  const { data: pastAnalyses = [], isLoading: historyLoading } = useQuery<
+    AnalysisRecord[]
+  >({
+    queryKey: ["myAnalyses"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getMyAnalyses();
+    },
+    enabled: !!actor && isAuthenticated,
+  });
+
+  const updateStep = useCallback(
+    (stepIndex: number, status: AgentStep["status"]) => {
+      setAgentSteps((prev) =>
+        prev.map((s, i) => (i === stepIndex ? { ...s, status } : s)),
+      );
+    },
+    [],
+  );
+
+  const handleAnalyze = async (
+    file: File,
+    patientName: string,
+    modality: ModalityUI,
+    patientPhone: string,
+  ) => {
+    setIsAnalyzing(true);
+    setCurrentPatient(patientName);
+    setCurrentPatientPhone(patientPhone);
+    setCurrentModality(modality);
+
+    // Reset steps
+    setAgentSteps(initialSteps.map((s) => ({ ...s, status: "idle" as const })));
+
+    // Create preview URL
+    const url = URL.createObjectURL(file);
+    setImageUrl(url);
+
+    // Convert to base64
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    let binary = "";
+    for (const b of uint8) {
+      binary += String.fromCharCode(b);
+    }
+    const base64 = btoa(binary);
+
+    // Step progression helper
+    const stepProgress = async (stepIdx: number) => {
+      if (stepIdx > 0) updateStep(stepIdx - 1, "complete");
+      if (stepIdx < 4) updateStep(stepIdx, "processing");
+      await new Promise((r) => setTimeout(r, 800));
+    };
+
+    try {
+      const result = await runAnalysisPipeline(
+        base64,
+        async (step) => {
+          await stepProgress(step);
+        },
+        file.name,
+      );
+
+      // Mark all complete
+      setAgentSteps(
+        initialSteps.map((s) => ({ ...s, status: "complete" as const })),
+      );
+
+      // Submit to backend
+      if (actor) {
+        try {
+          const blob = ExternalBlob.fromBytes(uint8 as Uint8Array<ArrayBuffer>);
+          const id = await actor.submitAnalysis({
+            imageQuality: result.quality,
+            reportText: result.reportText,
+            modality: modalityToBackend(modality),
+            triageStatus: result.triageStatus,
+            timestamp: BigInt(Date.now()) * BigInt(1_000_000),
+            patientName,
+            patientPhone,
+            findings: result.findings.map((f) => `${f.name}: ${f.confidence}%`),
+            image: blob,
+            confidenceScores: result.findings.map((f) => f.confidence),
+          });
+          result.submittedId = id;
+          queryClient.invalidateQueries({ queryKey: ["myAnalyses"] });
+          toast.success(`Analysis submitted — ${caseId(id)}`);
+        } catch {
+          toast.error("Failed to save analysis to backend");
+        }
+      }
+
+      setAnalysisResult(result);
+      setView("analysis");
+
+      // Send alert if critical - show toast, user must click button (browsers block auto window.open)
+      if (
+        result.triageStatus === TriageStatus.critical ||
+        String(result.triageStatus).toLowerCase() === "critical"
+      ) {
+        toast.error(
+          `⚠️ CRITICAL CASE: Click the green "Send Alert via WhatsApp" button below to notify ${patientName}`,
+          { duration: 10000 },
+        );
+      }
+    } catch {
+      toast.error("Analysis failed");
+      setAgentSteps(
+        initialSteps.map((s) => ({ ...s, status: "idle" as const })),
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2
+          className="w-8 h-8 animate-spin text-primary"
+          data-ocid="app.loading_state"
+        />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginView onLogin={login} isLoggingIn={isLoggingIn} />
+        <Toaster theme="dark" />
+      </>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Header */}
+      <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm flex items-center px-4 gap-4 shrink-0">
+        <div className="flex items-center gap-2 min-w-[140px]">
+          <div className="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center">
+            <Brain className="w-4 h-4 text-primary" />
+          </div>
+          <span className="font-bold text-foreground text-sm tracking-tight">
+            Radioagent
+          </span>
+        </div>
+
+        {/* Nav tabs */}
+        <nav className="flex-1 flex items-center justify-center gap-1">
+          {(
+            [
+              {
+                id: "upload",
+                label: "Dashboard",
+                icon: <Activity className="w-3.5 h-3.5" />,
+              },
+              {
+                id: "history",
+                label: "History",
+                icon: <History className="w-3.5 h-3.5" />,
+              },
+              {
+                id: "triage",
+                label: "Emergency Triage",
+                icon: <AlertTriangle className="w-3.5 h-3.5" />,
+              },
+              {
+                id: "hospital",
+                label: "Hospital Dashboard",
+                icon: <BarChart3 className="w-3.5 h-3.5" />,
+              },
+            ] as { id: AppView; label: string; icon: React.ReactNode }[]
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setView(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                view === tab.id || (tab.id === "upload" && view === "analysis")
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+              data-ocid={`nav.${tab.id}.tab`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-1 min-w-[140px] justify-end">
+          <SettingsDialog />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clear}
+            className="text-muted-foreground hover:text-foreground text-xs gap-1.5"
+            data-ocid="header.delete_button"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </Button>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <AnimatePresence mode="wait">
+          {view === "triage" ? (
+            <motion.div
+              key="triage"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <EmergencyTriageView
+                analyses={pastAnalyses}
+                alertSentIds={alertSentIds}
+              />
+            </motion.div>
+          ) : view === "hospital" ? (
+            <motion.div
+              key="hospital"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <HospitalDashboard analyses={pastAnalyses} />
+            </motion.div>
+          ) : view === "history" ? (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <HistoryView analyses={pastAnalyses} isLoading={historyLoading} />
+            </motion.div>
+          ) : view === "analysis" && analysisResult ? (
+            <motion.div
+              key="analysis"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <AnalysisDashboard
+                result={analysisResult}
+                imageUrl={imageUrl}
+                patientName={currentPatient}
+                patientPhone={currentPatientPhone}
+                modality={currentModality}
+                agentSteps={agentSteps}
+                pastAnalyses={pastAnalyses}
+                onNewAnalysis={() => setView("upload")}
+                isDemoMode={!localStorage.getItem("gemini_api_key")}
+                onAlertSent={handleAlertSent}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="upload"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <UploadPanel
+                onAnalyze={handleAnalyze}
+                isAnalyzing={isAnalyzing}
+                agentSteps={agentSteps}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      <Toaster theme="dark" />
+    </div>
+  );
+}

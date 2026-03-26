@@ -101,6 +101,7 @@ export interface AnalysisRecord {
     id: AnalysisId;
     imageQuality: Quality;
     userId: UserId;
+    patientPhone: string;
     reportText: string;
     modality: Modality;
     triageStatus: TriageStatus;
@@ -113,6 +114,7 @@ export interface AnalysisRecord {
 export type UserId = Principal;
 export interface AnalysisInput {
     imageQuality: Quality;
+    patientPhone: string;
     reportText: string;
     modality: Modality;
     triageStatus: TriageStatus;
@@ -442,6 +444,7 @@ async function from_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promi
     id: _AnalysisId;
     imageQuality: _Quality;
     userId: _UserId;
+    patientPhone: string;
     reportText: string;
     modality: _Modality;
     triageStatus: _TriageStatus;
@@ -454,6 +457,7 @@ async function from_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promi
     id: AnalysisId;
     imageQuality: Quality;
     userId: UserId;
+    patientPhone: string;
     reportText: string;
     modality: Modality;
     triageStatus: TriageStatus;
@@ -467,6 +471,7 @@ async function from_candid_record_n11(_uploadFile: (file: ExternalBlob) => Promi
         id: value.id,
         imageQuality: from_candid_Quality_n12(_uploadFile, _downloadFile, value.imageQuality),
         userId: value.userId,
+        patientPhone: value.patientPhone,
         reportText: value.reportText,
         modality: from_candid_Modality_n14(_uploadFile, _downloadFile, value.modality),
         triageStatus: from_candid_TriageStatus_n16(_uploadFile, _downloadFile, value.triageStatus),
@@ -548,6 +553,7 @@ function to_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Arra
 }
 async function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     imageQuality: Quality;
+    patientPhone: string;
     reportText: string;
     modality: Modality;
     triageStatus: TriageStatus;
@@ -558,6 +564,7 @@ async function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise
     confidenceScores: Array<number>;
 }): Promise<{
     imageQuality: _Quality;
+    patientPhone: string;
     reportText: string;
     modality: _Modality;
     triageStatus: _TriageStatus;
@@ -569,6 +576,7 @@ async function to_candid_record_n24(_uploadFile: (file: ExternalBlob) => Promise
 }> {
     return {
         imageQuality: to_candid_Quality_n25(_uploadFile, _downloadFile, value.imageQuality),
+        patientPhone: value.patientPhone,
         reportText: value.reportText,
         modality: to_candid_Modality_n27(_uploadFile, _downloadFile, value.modality),
         triageStatus: to_candid_TriageStatus_n29(_uploadFile, _downloadFile, value.triageStatus),

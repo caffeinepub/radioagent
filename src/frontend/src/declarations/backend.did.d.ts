@@ -13,6 +13,7 @@ import type { Principal } from '@icp-sdk/core/principal';
 export type AnalysisId = bigint;
 export interface AnalysisInput {
   'imageQuality' : Quality,
+  'patientPhone' : string,
   'reportText' : string,
   'modality' : Modality,
   'triageStatus' : TriageStatus,
@@ -26,6 +27,7 @@ export interface AnalysisRecord {
   'id' : AnalysisId,
   'imageQuality' : Quality,
   'userId' : UserId,
+  'patientPhone' : string,
   'reportText' : string,
   'modality' : Modality,
   'triageStatus' : TriageStatus,

@@ -38,6 +38,7 @@ export const AnalysisRecord = IDL.Record({
   'id' : AnalysisId,
   'imageQuality' : Quality,
   'userId' : UserId,
+  'patientPhone' : IDL.Text,
   'reportText' : IDL.Text,
   'modality' : Modality,
   'triageStatus' : TriageStatus,
@@ -50,6 +51,7 @@ export const AnalysisRecord = IDL.Record({
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 export const AnalysisInput = IDL.Record({
   'imageQuality' : Quality,
+  'patientPhone' : IDL.Text,
   'reportText' : IDL.Text,
   'modality' : Modality,
   'triageStatus' : TriageStatus,
@@ -137,6 +139,7 @@ export const idlFactory = ({ IDL }) => {
     'id' : AnalysisId,
     'imageQuality' : Quality,
     'userId' : UserId,
+    'patientPhone' : IDL.Text,
     'reportText' : IDL.Text,
     'modality' : Modality,
     'triageStatus' : TriageStatus,
@@ -149,6 +152,7 @@ export const idlFactory = ({ IDL }) => {
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   const AnalysisInput = IDL.Record({
     'imageQuality' : Quality,
+    'patientPhone' : IDL.Text,
     'reportText' : IDL.Text,
     'modality' : Modality,
     'triageStatus' : TriageStatus,

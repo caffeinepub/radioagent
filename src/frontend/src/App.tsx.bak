@@ -1209,75 +1209,24 @@ const DOCTOR_CREDENTIALS: Record<
   },
 };
 
-function getStoredPasswords(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem("doctor_passwords");
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function savePassword(doctorId: string, password: string) {
-  const stored = getStoredPasswords();
-  stored[doctorId] = password;
-  localStorage.setItem("doctor_passwords", JSON.stringify(stored));
-}
-
 function LoginView({
   onLogin,
   isLoggingIn,
 }: { onLogin: () => void; isLoggingIn: boolean }) {
   const [doctorId, setDoctorId] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [isNewDoctor, setIsNewDoctor] = useState<boolean | null>(null);
+  const [credVerified, setCredVerified] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCredentialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const id = doctorId.trim().toUpperCase();
-    if (!id) {
-      setError("Please enter your Doctor ID.");
+    const cred = DOCTOR_CREDENTIALS[doctorId.trim().toUpperCase()];
+    if (!cred || cred.password !== password) {
+      setError("Invalid Doctor ID or password. Please try again.");
       return;
     }
-    if (!password) {
-      setError("Please enter your password.");
-      return;
-    }
-
-    const hardcoded = DOCTOR_CREDENTIALS[id];
-    const stored = getStoredPasswords();
-    const existingPassword = hardcoded ? hardcoded.password : stored[id];
-
-    if (existingPassword) {
-      // Existing doctor — validate password
-      if (password !== existingPassword) {
-        setError("Incorrect password. Please try again.");
-        return;
-      }
-      setIsNewDoctor(false);
-      onLogin();
-    } else {
-      // New doctor — register
-      if (isNewDoctor === null) {
-        // First attempt — show confirm field
-        setIsNewDoctor(true);
-        return;
-      }
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters.");
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError("Passwords do not match.");
-        return;
-      }
-      savePassword(id, password);
-      setIsNewDoctor(false);
-      onLogin();
-    }
+    setCredVerified(true);
   };
 
   return (
@@ -1311,118 +1260,107 @@ function LoginView({
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {isNewDoctor === true && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-md px-3 py-2">
-                  <p className="text-xs text-blue-400 font-medium">
-                    New Doctor ID
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Create a password for{" "}
-                    <span className="font-semibold">
-                      {doctorId.toUpperCase()}
-                    </span>
-                    . You will use this same password every time.
-                  </p>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="doctor-id"
-                  className="text-xs text-muted-foreground"
-                >
-                  Doctor ID
-                </Label>
-                <Input
-                  id="doctor-id"
-                  placeholder="e.g. DR001"
-                  value={doctorId}
-                  onChange={(e) => {
-                    setDoctorId(e.target.value);
-                    setIsNewDoctor(null);
-                    setError("");
-                  }}
-                  className="bg-background/50 border-border/60 text-sm"
-                  autoComplete="username"
-                  required
-                  data-ocid="login.input"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="doctor-password"
-                  className="text-xs text-muted-foreground"
-                >
-                  {isNewDoctor === true ? "New Password" : "Password"}
-                </Label>
-                <Input
-                  id="doctor-password"
-                  type="password"
-                  placeholder={
-                    isNewDoctor === true
-                      ? "Min. 6 characters"
-                      : "Enter your password"
-                  }
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-background/50 border-border/60 text-sm"
-                  autoComplete={
-                    isNewDoctor === true ? "new-password" : "current-password"
-                  }
-                  required
-                  data-ocid="login.input"
-                />
-              </div>
-              {isNewDoctor === true && (
+            {!credVerified ? (
+              <form onSubmit={handleCredentialSubmit} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label
-                    htmlFor="confirm-password"
+                    htmlFor="doctor-id"
                     className="text-xs text-muted-foreground"
                   >
-                    Confirm Password
+                    Doctor ID
                   </Label>
                   <Input
-                    id="confirm-password"
-                    type="password"
-                    placeholder="Re-enter password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    id="doctor-id"
+                    placeholder="e.g. DR001"
+                    value={doctorId}
+                    onChange={(e) => setDoctorId(e.target.value)}
                     className="bg-background/50 border-border/60 text-sm"
-                    autoComplete="new-password"
+                    autoComplete="username"
                     required
-                    data-ocid="login.input"
                   />
                 </div>
-              )}
-              {error && (
-                <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
-                  {error}
-                </p>
-              )}
-              <Button
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold mt-2"
-                data-ocid="login.primary_button"
-              >
-                {isLoggingIn ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
-                  </>
-                ) : isNewDoctor === true ? (
-                  <>
-                    <Shield className="mr-2 h-4 w-4" />
-                    Register & Login
-                  </>
-                ) : (
-                  "Login"
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="doctor-password"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Password
+                  </Label>
+                  <Input
+                    id="doctor-password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-background/50 border-border/60 text-sm"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                {error && (
+                  <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+                    {error}
+                  </p>
                 )}
-              </Button>
-              <p className="text-center text-xs text-muted-foreground/50 pt-1">
-                Demo IDs: DR001–DR004
-              </p>
-            </form>
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold mt-2"
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Verify Credentials
+                </Button>
+                <p className="text-center text-xs text-muted-foreground/50 pt-1">
+                  Demo IDs: DR001–DR004
+                </p>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-md px-3 py-2.5">
+                  <Shield className="w-4 h-4 text-primary shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-foreground">
+                      {DOCTOR_CREDENTIALS[doctorId.trim().toUpperCase()]?.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {
+                        DOCTOR_CREDENTIALS[doctorId.trim().toUpperCase()]
+                          ?.specialty
+                      }{" "}
+                      · {doctorId.toUpperCase()}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-center text-muted-foreground">
+                  Complete sign-in with your secure identity
+                </p>
+                <Button
+                  onClick={onLogin}
+                  disabled={isLoggingIn}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                  data-ocid="login.primary_button"
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    "Complete Login"
+                  )}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCredVerified(false);
+                    setPassword("");
+                    setError("");
+                  }}
+                  className="w-full text-xs text-muted-foreground/60 hover:text-muted-foreground text-center pt-1"
+                >
+                  ← Use different credentials
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -1431,12 +1369,7 @@ function LoginView({
 }
 
 interface UploadPanelProps {
-  onAnalyze: (
-    file: File,
-    patientName: string,
-    modality: ModalityUI,
-    patientPhone: string,
-  ) => void;
+  onAnalyze: (file: File, patientName: string, modality: ModalityUI) => void;
   isAnalyzing: boolean;
   agentSteps: AgentStep[];
 }
@@ -1446,7 +1379,6 @@ function UploadPanel({ onAnalyze, isAnalyzing, agentSteps }: UploadPanelProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [patientName, setPatientName] = useState("");
-  const [patientPhone, setPatientPhone] = useState("");
   const [modality, setModality] = useState<ModalityUI>("xray");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1472,11 +1404,7 @@ function UploadPanel({ onAnalyze, isAnalyzing, agentSteps }: UploadPanelProps) {
       toast.error("Please enter patient name");
       return;
     }
-    if (!patientPhone.trim()) {
-      toast.error("Please enter patient phone number");
-      return;
-    }
-    onAnalyze(file, patientName, modality, patientPhone);
+    onAnalyze(file, patientName, modality);
   };
 
   return (
@@ -1570,18 +1498,6 @@ function UploadPanel({ onAnalyze, isAnalyzing, agentSteps }: UploadPanelProps) {
                   placeholder="Enter patient full name"
                   className="bg-card border-border text-foreground"
                   data-ocid="upload.input"
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5 block">
-                  Patient Phone Number
-                </Label>
-                <Input
-                  value={patientPhone}
-                  onChange={(e) => setPatientPhone(e.target.value)}
-                  placeholder="e.g. +1 555 123 4567"
-                  type="tel"
-                  className="bg-card border-border text-foreground"
                 />
               </div>
               <div>
@@ -1718,26 +1634,22 @@ interface AnalysisDashboardProps {
   result: AnalysisResult;
   imageUrl: string;
   patientName: string;
-  patientPhone: string;
   modality: ModalityUI;
   agentSteps: AgentStep[];
   pastAnalyses: AnalysisRecord[];
   onNewAnalysis: () => void;
   isDemoMode: boolean;
-  onAlertSent: (id: string) => void;
 }
 
 function AnalysisDashboard({
   result,
   imageUrl,
   patientName,
-  patientPhone,
   modality,
   agentSteps,
   pastAnalyses,
   onNewAnalysis,
   isDemoMode,
-  onAlertSent,
 }: AnalysisDashboardProps) {
   const [reportText, setReportText] = useState(result.reportText);
   const cid =
@@ -1789,47 +1701,6 @@ function AnalysisDashboard({
             New Analysis
           </Button>
         </div>
-
-        {/* WhatsApp critical alert banner */}
-        {(result.triageStatus === TriageStatus.critical ||
-          String(result.triageStatus).toLowerCase() === "critical") &&
-          (() => {
-            const cleanPhone = patientPhone.replace(/[^0-9]/g, "");
-            const phoneWithCountry = cleanPhone.startsWith("91")
-              ? cleanPhone
-              : `91${cleanPhone}`;
-            const waMsg = encodeURIComponent(
-              "⚠️ Emergency Alert: Your health condition is critical. Please seek immediate medical attention.",
-            );
-            const waUrl = `https://wa.me/${phoneWithCountry}?text=${waMsg}`;
-            return (
-              <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-red-50 border-2 border-red-500">
-                <div className="flex items-center gap-2 text-red-700 text-sm font-bold">
-                  <AlertTriangle className="w-4 h-4" />
-                  CRITICAL CASE — {patientName} ({patientPhone})
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-red-600 text-xs">
-                    ⚠️ Click the button → WhatsApp will open → Press{" "}
-                    <strong>Send</strong> inside WhatsApp to deliver the
-                    message.
-                  </p>
-                  <a
-                    href={waUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() =>
-                      result.submittedId !== undefined &&
-                      onAlertSent(String(result.submittedId))
-                    }
-                    className="shrink-0 inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-md"
-                  >
-                    📱 Send Alert via WhatsApp
-                  </a>
-                </div>
-              </div>
-            );
-          })()}
 
         {/* 3-column grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -1883,7 +1754,6 @@ function AnalysisDashboard({
               <CardContent className="space-y-2.5">
                 {[
                   { label: "Patient", value: patientName },
-                  { label: "Phone", value: patientPhone || "—" },
                   { label: "Modality", value: modalityLabel(modality) },
                   { label: "Date", value: new Date().toLocaleDateString() },
                   {
@@ -2010,15 +1880,6 @@ interface HistoryViewProps {
 }
 
 function HistoryView({ analyses, isLoading }: HistoryViewProps) {
-  const [selectedRecord, setSelectedRecord] = useState<AnalysisRecord | null>(
-    null,
-  );
-  function handleDialogClose(open: boolean) {
-    if (!open) {
-      setSelectedRecord(null);
-    }
-  }
-
   return (
     <div className="flex-1 p-6 overflow-auto">
       <motion.div
@@ -2058,9 +1919,6 @@ function HistoryView({ analyses, isLoading }: HistoryViewProps) {
                       Patient
                     </TableHead>
                     <TableHead className="text-muted-foreground text-xs">
-                      Phone
-                    </TableHead>
-                    <TableHead className="text-muted-foreground text-xs">
                       Modality
                     </TableHead>
                     <TableHead className="text-muted-foreground text-xs">
@@ -2072,15 +1930,12 @@ function HistoryView({ analyses, isLoading }: HistoryViewProps) {
                     <TableHead className="text-muted-foreground text-xs">
                       Findings
                     </TableHead>
-                    <TableHead className="text-muted-foreground text-xs">
-                      Report
-                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {analyses.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12">
+                      <TableCell colSpan={6} className="text-center py-12">
                         <div
                           data-ocid="history.empty_state"
                           className="space-y-2"
@@ -2106,9 +1961,6 @@ function HistoryView({ analyses, isLoading }: HistoryViewProps) {
                           {r.patientName}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          {r.patientPhone || "—"}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
                           {modalityLabel(r.modality)}
                         </TableCell>
                         <TableCell>
@@ -2121,17 +1973,6 @@ function HistoryView({ analyses, isLoading }: HistoryViewProps) {
                           {r.findings.length} finding
                           {r.findings.length !== 1 ? "s" : ""}
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            data-ocid={`history.report.button.${i + 1}`}
-                            onClick={() => setSelectedRecord(r)}
-                          >
-                            <FileText className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -2141,57 +1982,6 @@ function HistoryView({ analyses, isLoading }: HistoryViewProps) {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Report Dialog */}
-      <Dialog open={!!selectedRecord} onOpenChange={handleDialogClose}>
-        <DialogContent
-          className="max-w-2xl bg-card border-border"
-          data-ocid="history.report.dialog"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-foreground flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              Radiology Report —{" "}
-              {selectedRecord ? caseId(selectedRecord.id) : ""}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRecord && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="text-muted-foreground">Patient:</span>
-                <span className="font-medium text-foreground">
-                  {selectedRecord.patientName}
-                </span>
-                <span className="text-muted-foreground">|</span>
-                <span className="text-muted-foreground">
-                  {formatDate(selectedRecord.timestamp)}
-                </span>
-                <span className="text-muted-foreground">|</span>
-                <TriageBadge status={selectedRecord.triageStatus} />
-              </div>
-              <Textarea
-                readOnly
-                value={
-                  selectedRecord.reportText ||
-                  "No report available for this case."
-                }
-                className="bg-muted/30 border-border text-foreground text-xs font-mono min-h-64 resize-y leading-relaxed"
-                data-ocid="history.report.textarea"
-              />
-              <div className="flex justify-end pt-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  data-ocid="history.report.close_button"
-                  onClick={() => handleDialogClose(false)}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -2219,10 +2009,7 @@ function isCritical(status: TriageStatus | string): boolean {
   );
 }
 
-function EmergencyTriageView({
-  analyses,
-  alertSentIds,
-}: { analyses: AnalysisRecord[]; alertSentIds: Set<string> }) {
+function EmergencyTriageView({ analyses }: { analyses: AnalysisRecord[] }) {
   const critical = analyses.filter((a) => isCritical(a.triageStatus));
 
   return (
@@ -2310,15 +2097,9 @@ function EmergencyTriageView({
                           </span>
                         </TableCell>
                         <TableCell>
-                          {alertSentIds.has(String(r.id)) ? (
-                            <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/20">
-                              ✓ Sent
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 hover:bg-yellow-200">
-                              ⏳ Pending
-                            </Badge>
-                          )}
+                          <Badge className="bg-success/15 text-success border-success/30 hover:bg-success/20">
+                            ✓ Sent
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     );
@@ -2565,10 +2346,6 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState<string>("");
   const [currentPatient, setCurrentPatient] = useState("");
   const [currentModality, setCurrentModality] = useState<ModalityUI>("xray");
-  const [currentPatientPhone, setCurrentPatientPhone] = useState("");
-  const [alertSentIds, setAlertSentIds] = useState<Set<string>>(new Set());
-  const handleAlertSent = (id: string) =>
-    setAlertSentIds((prev) => new Set(prev).add(id));
 
   const initialSteps: AgentStep[] = [
     { name: "Image Quality Assessment", status: "idle", icon: <Activity /> },
@@ -2602,11 +2379,9 @@ export default function App() {
     file: File,
     patientName: string,
     modality: ModalityUI,
-    patientPhone: string,
   ) => {
     setIsAnalyzing(true);
     setCurrentPatient(patientName);
-    setCurrentPatientPhone(patientPhone);
     setCurrentModality(modality);
 
     // Reset steps
@@ -2657,7 +2432,6 @@ export default function App() {
             triageStatus: result.triageStatus,
             timestamp: BigInt(Date.now()) * BigInt(1_000_000),
             patientName,
-            patientPhone,
             findings: result.findings.map((f) => `${f.name}: ${f.confidence}%`),
             image: blob,
             confidenceScores: result.findings.map((f) => f.confidence),
@@ -2672,17 +2446,6 @@ export default function App() {
 
       setAnalysisResult(result);
       setView("analysis");
-
-      // Send alert if critical - show toast, user must click button (browsers block auto window.open)
-      if (
-        result.triageStatus === TriageStatus.critical ||
-        String(result.triageStatus).toLowerCase() === "critical"
-      ) {
-        toast.error(
-          `⚠️ CRITICAL CASE: Click the green "Send Alert via WhatsApp" button below to notify ${patientName}`,
-          { duration: 10000 },
-        );
-      }
     } catch {
       toast.error("Analysis failed");
       setAgentSteps(
@@ -2796,10 +2559,7 @@ export default function App() {
               transition={{ duration: 0.25 }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <EmergencyTriageView
-                analyses={pastAnalyses}
-                alertSentIds={alertSentIds}
-              />
+              <EmergencyTriageView analyses={pastAnalyses} />
             </motion.div>
           ) : view === "hospital" ? (
             <motion.div
@@ -2836,13 +2596,11 @@ export default function App() {
                 result={analysisResult}
                 imageUrl={imageUrl}
                 patientName={currentPatient}
-                patientPhone={currentPatientPhone}
                 modality={currentModality}
                 agentSteps={agentSteps}
                 pastAnalyses={pastAnalyses}
                 onNewAnalysis={() => setView("upload")}
                 isDemoMode={!localStorage.getItem("gemini_api_key")}
-                onAlertSent={handleAlertSent}
               />
             </motion.div>
           ) : (
@@ -2863,6 +2621,21 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-3 px-6 text-center">
+        <p className="text-xs text-muted-foreground/60">
+          © {new Date().getFullYear()}. Built with ❤️ using{" "}
+          <a
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary/70 hover:text-primary transition-colors"
+          >
+            caffeine.ai
+          </a>
+        </p>
+      </footer>
 
       <Toaster theme="dark" />
     </div>
